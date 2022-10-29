@@ -58,7 +58,7 @@ from ..const import (
 )
 from ..debug_info import log_messages
 from ..mixins import MQTT_ENTITY_COMMON_SCHEMA, MqttEntity
-from ..util import valid_subscribe_topic
+from ..util import get_mqtt_data, valid_subscribe_topic
 from .schema import MQTT_LIGHT_SCHEMA_SCHEMA
 from .schema_basic import (
     CONF_BRIGHTNESS_SCALE,
@@ -256,7 +256,9 @@ class MqttLightJson(MqttEntity, LightEntity, RestoreEntity):
             except KeyError:
                 pass
             except ValueError:
-                _LOGGER.warning("Invalid RGB color value received")
+                _LOGGER.warning(
+                    "Invalid RGB color value received for entity %s", self.entity_id
+                )
                 return
 
             try:
@@ -266,7 +268,9 @@ class MqttLightJson(MqttEntity, LightEntity, RestoreEntity):
             except KeyError:
                 pass
             except ValueError:
-                _LOGGER.warning("Invalid XY color value received")
+                _LOGGER.warning(
+                    "Invalid XY color value received for entity %s", self.entity_id
+                )
                 return
 
             try:
@@ -276,12 +280,16 @@ class MqttLightJson(MqttEntity, LightEntity, RestoreEntity):
             except KeyError:
                 pass
             except ValueError:
-                _LOGGER.warning("Invalid HS color value received")
+                _LOGGER.warning(
+                    "Invalid HS color value received for entity %s", self.entity_id
+                )
                 return
         else:
             color_mode = values["color_mode"]
             if not self._supports_color_mode(color_mode):
-                _LOGGER.warning("Invalid color mode received")
+                _LOGGER.warning(
+                    "Invalid color mode received for entity %s", self.entity_id
+                )
                 return
             try:
                 if color_mode == ColorMode.COLOR_TEMP:
@@ -321,7 +329,10 @@ class MqttLightJson(MqttEntity, LightEntity, RestoreEntity):
                     self._color_mode = ColorMode.XY
                     self._xy = (x, y)
             except (KeyError, ValueError):
-                _LOGGER.warning("Invalid or incomplete color value received")
+                _LOGGER.warning(
+                    "Invalid or incomplete color value received for entity %s",
+                    self.entity_id,
+                )
 
     def _prepare_subscribe_topics(self):
         """(Re)Subscribe to topics."""
@@ -363,7 +374,10 @@ class MqttLightJson(MqttEntity, LightEntity, RestoreEntity):
                 except KeyError:
                     pass
                 except (TypeError, ValueError):
-                    _LOGGER.warning("Invalid brightness value received")
+                    _LOGGER.warning(
+                        "Invalid brightness value received for entity %s",
+                        self.entity_id,
+                    )
 
             if (
                 ColorMode.COLOR_TEMP in self._supported_color_modes
@@ -378,13 +392,16 @@ class MqttLightJson(MqttEntity, LightEntity, RestoreEntity):
                 except KeyError:
                     pass
                 except ValueError:
-                    _LOGGER.warning("Invalid color temp value received")
+                    _LOGGER.warning(
+                        "Invalid color temp value received for entity %s",
+                        self.entity_id,
+                    )
 
             if self._supported_features and LightEntityFeature.EFFECT:
                 with suppress(KeyError):
                     self._effect = values["effect"]
 
-            self.async_write_ha_state()
+            get_mqtt_data(self.hass).state_write_requests.write_state_request(self)
 
         if self._topic[CONF_STATE_TOPIC] is not None:
             self._sub_state = subscription.async_prepare_subscribe_topics(

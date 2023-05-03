@@ -2311,6 +2311,12 @@
         }
       }
     },
+    "ha_portainer": {
+      "name": "Portainer",
+      "integration_type": "hub",
+      "config_flow": true,
+      "iot_class": "local_polling"
+    },
     "homeseer": {
       "name": "HomeSeer",
       "iot_standards": [

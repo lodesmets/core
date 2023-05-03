@@ -1,0 +1,9 @@
+{
+  "domain": "ha_portainer",
+  "name": "Portainer",
+  "codeowners": ["@lodesmets"],
+  "config_flow": true,
+  "documentation": "https://github.com/lodesmets/homeassistant-portainer",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/lodesmets/homeassistant-portainer/issues"
+}

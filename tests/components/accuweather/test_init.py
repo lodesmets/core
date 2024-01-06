@@ -104,7 +104,7 @@ async def test_update_interval_forecast(hass: HomeAssistant) -> None:
         "homeassistant.components.accuweather.AccuWeather.async_get_current_conditions",
         return_value=current,
     ) as mock_current, patch(
-        "homeassistant.components.accuweather.AccuWeather.async_get_forecast",
+        "homeassistant.components.accuweather.AccuWeather.async_get_daily_forecast",
         return_value=forecast,
     ) as mock_forecast:
         assert mock_current.call_count == 0
@@ -117,11 +117,11 @@ async def test_update_interval_forecast(hass: HomeAssistant) -> None:
         assert mock_forecast.call_count == 1
 
 
-async def test_remove_ozone_sensors(hass: HomeAssistant) -> None:
+async def test_remove_ozone_sensors(
+    hass: HomeAssistant, entity_registry: er.EntityRegistry
+) -> None:
     """Test remove ozone sensors from registry."""
-    registry = er.async_get(hass)
-
-    registry.async_get_or_create(
+    entity_registry.async_get_or_create(
         SENSOR_PLATFORM,
         DOMAIN,
         "0123456-ozone-0",
@@ -131,5 +131,5 @@ async def test_remove_ozone_sensors(hass: HomeAssistant) -> None:
 
     await init_integration(hass)
 
-    entry = registry.async_get("sensor.home_ozone_0d")
+    entry = entity_registry.async_get("sensor.home_ozone_0d")
     assert entry is None

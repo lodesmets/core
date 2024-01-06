@@ -11,22 +11,24 @@ from homeassistant.components.bluetooth import (
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
 )
-from homeassistant.components.bluetooth.passive_update_processor import (
-    PassiveBluetoothProcessorCoordinator,
-)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceRegistry, async_get
+from homeassistant.helpers.device_registry import (
+    CONNECTION_BLUETOOTH,
+    DeviceRegistry,
+    async_get,
+)
 
 from .const import (
     BTHOME_BLE_EVENT,
     CONF_BINDKEY,
     CONF_DISCOVERED_EVENT_CLASSES,
+    CONF_SLEEPY_DEVICE,
     DOMAIN,
     BTHomeBleEvent,
 )
-from .models import BTHomeData
+from .coordinator import BTHomePassiveBluetoothProcessorCoordinator
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
@@ -42,13 +44,22 @@ def process_service_info(
 ) -> SensorUpdate:
     """Process a BluetoothServiceInfoBleak, running side effects and returning sensor data."""
     update = data.update(service_info)
-    domain_data: BTHomeData = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BTHomePassiveBluetoothProcessorCoordinator = hass.data[DOMAIN][
+        entry.entry_id
+    ]
+    discovered_device_classes = coordinator.discovered_device_classes
+    if entry.data.get(CONF_SLEEPY_DEVICE, False) != data.sleepy_device:
+        hass.config_entries.async_update_entry(
+            entry,
+            data=entry.data | {CONF_SLEEPY_DEVICE: data.sleepy_device},
+        )
     if update.events:
         address = service_info.device.address
         for device_key, event in update.events.items():
             sensor_device_info = update.devices[device_key.device_id]
             device = device_registry.async_get_or_create(
                 config_entry_id=entry.entry_id,
+                connections={(CONNECTION_BLUETOOTH, address)},
                 identifiers={(BLUETOOTH_DOMAIN, address)},
                 manufacturer=sensor_device_info.manufacturer,
                 model=sensor_device_info.model,
@@ -59,16 +70,12 @@ def process_service_info(
             event_class = event.device_key.key
             event_type = event.event_type
 
-            if event_class not in domain_data.discovered_event_classes:
-                domain_data.discovered_event_classes.add(event_class)
+            if event_class not in discovered_device_classes:
+                discovered_device_classes.add(event_class)
                 hass.config_entries.async_update_entry(
                     entry,
                     data=entry.data
-                    | {
-                        CONF_DISCOVERED_EVENT_CLASSES: list(
-                            domain_data.discovered_event_classes
-                        )
-                    },
+                    | {CONF_DISCOVERED_EVENT_CLASSES: list(discovered_device_classes)},
                 )
 
             hass.bus.async_fire(
@@ -104,7 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_registry = async_get(hass)
     coordinator = hass.data.setdefault(DOMAIN, {})[
         entry.entry_id
-    ] = PassiveBluetoothProcessorCoordinator(
+    ] = BTHomePassiveBluetoothProcessorCoordinator(
         hass,
         _LOGGER,
         address=address,
@@ -112,11 +119,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         update_method=lambda service_info: process_service_info(
             hass, entry, data, service_info, device_registry
         ),
+        device_data=data,
+        discovered_device_classes=set(
+            entry.data.get(CONF_DISCOVERED_EVENT_CLASSES, [])
+        ),
         connectable=False,
+        entry=entry,
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    domain_data = BTHomeData(set(entry.data.get(CONF_DISCOVERED_EVENT_CLASSES, [])))
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = domain_data
 
     entry.async_on_unload(
         coordinator.async_start()

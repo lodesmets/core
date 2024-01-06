@@ -9,9 +9,9 @@ from typing import Any
 from ical.calendar import Calendar
 from ical.calendar_stream import IcsCalendarStream
 from ical.event import Event
+from ical.exceptions import CalendarParseError
 from ical.store import EventStore, EventStoreError
 from ical.types import Range, Recur
-from pydantic import ValidationError
 import voluptuous as vol
 
 from homeassistant.components.calendar import (
@@ -129,7 +129,7 @@ class LocalCalendarEntity(CalendarEntity):
                 recurrence_range=range_value,
             )
         except EventStoreError as err:
-            raise HomeAssistantError("Error while deleting event: {err}") from err
+            raise HomeAssistantError(f"Error while deleting event: {err}") from err
         await self._async_store()
         await self.async_update_ha_state(force_refresh=True)
 
@@ -153,7 +153,7 @@ class LocalCalendarEntity(CalendarEntity):
                 recurrence_range=range_value,
             )
         except EventStoreError as err:
-            raise HomeAssistantError("Error while updating event: {err}") from err
+            raise HomeAssistantError(f"Error while updating event: {err}") from err
         await self._async_store()
         await self.async_update_ha_state(force_refresh=True)
 
@@ -178,8 +178,8 @@ def _parse_event(event: dict[str, Any]) -> Event:
             event[key] = dt_util.as_local(value).replace(tzinfo=None)
 
     try:
-        return Event.parse_obj(event)
-    except ValidationError as err:
+        return Event(**event)
+    except CalendarParseError as err:
         _LOGGER.debug("Error parsing event input fields: %s (%s)", event, str(err))
         raise vol.Invalid("Error parsing event input fields") from err
 

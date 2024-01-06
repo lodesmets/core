@@ -4,17 +4,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, cast
 
-from lru import LRU  # pylint: disable=no-name-in-module
+from lru import LRU
 from sqlalchemy.orm.session import Session
 
 from homeassistant.core import Event
 
-from . import BaseLRUTableManager
-from ..const import SQLITE_MAX_BIND_VARS
 from ..db_schema import EventTypes
 from ..queries import find_event_type_ids
 from ..tasks import RefreshEventTypesTask
 from ..util import chunked, execute_stmt_lambda_element
+from . import BaseLRUTableManager
 
 if TYPE_CHECKING:
     from ..core import Recorder
@@ -29,7 +28,7 @@ class EventTypeManager(BaseLRUTableManager[EventTypes]):
     def __init__(self, recorder: Recorder) -> None:
         """Initialize the event type manager."""
         super().__init__(recorder, CACHE_SIZE)
-        self._non_existent_event_types: LRU = LRU(CACHE_SIZE)
+        self._non_existent_event_types: LRU[str, None] = LRU(CACHE_SIZE)
 
     def load(self, events: list[Event], session: Session) -> None:
         """Load the event_type to event_type_ids mapping into memory.
@@ -78,7 +77,7 @@ class EventTypeManager(BaseLRUTableManager[EventTypes]):
             return results
 
         with session.no_autoflush:
-            for missing_chunk in chunked(missing, SQLITE_MAX_BIND_VARS):
+            for missing_chunk in chunked(missing, self.recorder.max_bind_vars):
                 for event_type_id, event_type in execute_stmt_lambda_element(
                     session, find_event_type_ids(missing_chunk), orm_rows=False
                 ):
@@ -120,8 +119,16 @@ class EventTypeManager(BaseLRUTableManager[EventTypes]):
         """
         for event_type, db_event_types in self._pending.items():
             self._id_map[event_type] = db_event_types.event_type_id
-            self._non_existent_event_types.pop(event_type, None)
+            self.clear_non_existent(event_type)
         self._pending.clear()
+
+    def clear_non_existent(self, event_type: str) -> None:
+        """Clear a non-existent event type from the cache.
+
+        This call is not thread-safe and must be called from the
+        recorder thread.
+        """
+        self._non_existent_event_types.pop(event_type, None)
 
     def evict_purged(self, event_types: Iterable[str]) -> None:
         """Evict purged event_types from the cache when they are no longer used.

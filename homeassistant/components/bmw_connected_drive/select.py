@@ -4,13 +4,15 @@ from dataclasses import dataclass
 import logging
 from typing import Any
 
+from bimmer_connected.models import MyBMWAPIError
 from bimmer_connected.vehicle import MyBMWVehicle
 from bimmer_connected.vehicle.charging_profile import ChargingMode
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfElectricCurrent
+from homeassistant.const import UnitOfElectricCurrent
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import BMWBaseEntity
@@ -20,7 +22,7 @@ from .coordinator import BMWDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class BMWRequiredKeysMixin:
     """Mixin for required keys."""
 
@@ -28,7 +30,7 @@ class BMWRequiredKeysMixin:
     remote_service: Callable[[MyBMWVehicle, str], Coroutine[Any, Any, Any]]
 
 
-@dataclass
+@dataclass(frozen=True)
 class BMWSelectEntityDescription(SelectEntityDescription, BMWRequiredKeysMixin):
     """Describes BMW sensor entity."""
 
@@ -37,25 +39,13 @@ class BMWSelectEntityDescription(SelectEntityDescription, BMWRequiredKeysMixin):
 
 
 SELECT_TYPES: dict[str, BMWSelectEntityDescription] = {
-    # --- Generic ---
-    "target_soc": BMWSelectEntityDescription(
-        key="target_soc",
-        name="Target SoC",
-        is_available=lambda v: v.is_remote_set_target_soc_enabled,
-        options=[str(i * 5 + 20) for i in range(17)],
-        current_option=lambda v: str(v.fuel_and_battery.charging_target),
-        remote_service=lambda v, o: v.remote_services.trigger_charging_settings_update(
-            target_soc=int(o)
-        ),
-        icon="mdi:battery-charging-medium",
-        unit_of_measurement=PERCENTAGE,
-    ),
     "ac_limit": BMWSelectEntityDescription(
         key="ac_limit",
-        name="AC Charging Limit",
+        translation_key="ac_limit",
         is_available=lambda v: v.is_remote_set_ac_limit_enabled,
         dynamic_options=lambda v: [
-            str(lim) for lim in v.charging_profile.ac_available_limits  # type: ignore[union-attr]
+            str(lim)
+            for lim in v.charging_profile.ac_available_limits  # type: ignore[union-attr]
         ],
         current_option=lambda v: str(v.charging_profile.ac_current_limit),  # type: ignore[union-attr]
         remote_service=lambda v, o: v.remote_services.trigger_charging_settings_update(
@@ -66,7 +56,7 @@ SELECT_TYPES: dict[str, BMWSelectEntityDescription] = {
     ),
     "charging_mode": BMWSelectEntityDescription(
         key="charging_mode",
-        name="Charging Mode",
+        translation_key="charging_mode",
         is_available=lambda v: v.is_charging_plan_supported,
         options=[c.value for c in ChargingMode if c != ChargingMode.UNKNOWN],
         current_option=lambda v: str(v.charging_profile.charging_mode.value),  # type: ignore[union-attr]
@@ -136,4 +126,9 @@ class BMWSelect(BMWBaseEntity, SelectEntity):
             self.vehicle.vin,
             option,
         )
-        await self.entity_description.remote_service(self.vehicle, option)
+        try:
+            await self.entity_description.remote_service(self.vehicle, option)
+        except MyBMWAPIError as ex:
+            raise HomeAssistantError(ex) from ex
+
+        self.coordinator.async_update_listeners()

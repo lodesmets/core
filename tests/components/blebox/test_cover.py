@@ -98,7 +98,9 @@ def gate_fixture():
     return (feature, "cover.gatecontroller_position")
 
 
-async def test_init_gatecontroller(gatecontroller, hass: HomeAssistant) -> None:
+async def test_init_gatecontroller(
+    gatecontroller, hass: HomeAssistant, device_registry: dr.DeviceRegistry
+) -> None:
     """Test gateController default state."""
 
     _, entity_id = gatecontroller
@@ -118,7 +120,6 @@ async def test_init_gatecontroller(gatecontroller, hass: HomeAssistant) -> None:
     assert ATTR_CURRENT_POSITION not in state.attributes
     assert state.state == STATE_UNKNOWN
 
-    device_registry = dr.async_get(hass)
     device = device_registry.async_get(entry.device_id)
 
     assert device.name == "My gate controller"
@@ -128,7 +129,9 @@ async def test_init_gatecontroller(gatecontroller, hass: HomeAssistant) -> None:
     assert device.sw_version == "1.23"
 
 
-async def test_init_shutterbox(shutterbox, hass: HomeAssistant) -> None:
+async def test_init_shutterbox(
+    shutterbox, hass: HomeAssistant, device_registry: dr.DeviceRegistry
+) -> None:
     """Test gateBox default state."""
 
     _, entity_id = shutterbox
@@ -148,7 +151,6 @@ async def test_init_shutterbox(shutterbox, hass: HomeAssistant) -> None:
     assert ATTR_CURRENT_POSITION not in state.attributes
     assert state.state == STATE_UNKNOWN
 
-    device_registry = dr.async_get(hass)
     device = device_registry.async_get(entry.device_id)
 
     assert device.name == "My shutter"
@@ -158,7 +160,9 @@ async def test_init_shutterbox(shutterbox, hass: HomeAssistant) -> None:
     assert device.sw_version == "1.23"
 
 
-async def test_init_gatebox(gatebox, hass: HomeAssistant) -> None:
+async def test_init_gatebox(
+    gatebox, hass: HomeAssistant, device_registry: dr.DeviceRegistry
+) -> None:
     """Test cover default state."""
 
     _, entity_id = gatebox
@@ -180,7 +184,6 @@ async def test_init_gatebox(gatebox, hass: HomeAssistant) -> None:
     assert ATTR_CURRENT_POSITION not in state.attributes
     assert state.state == STATE_UNKNOWN
 
-    device_registry = dr.async_get(hass)
     device = device_registry.async_get(entry.device_id)
 
     assert device.name == "My gatebox"
@@ -427,7 +430,7 @@ async def test_closed_state(feature, hass: HomeAssistant) -> None:
     assert hass.states.get(entity_id).state == STATE_CLOSED
 
 
-async def test_tilt_position(shutterbox, hass):
+async def test_tilt_position(shutterbox, hass: HomeAssistant) -> None:
     """Test tilt capability is available."""
 
     feature_mock, entity_id = shutterbox
@@ -443,7 +446,7 @@ async def test_tilt_position(shutterbox, hass):
     assert state.attributes[ATTR_CURRENT_TILT_POSITION] == 10
 
 
-async def test_set_tilt_position(shutterbox, hass):
+async def test_set_tilt_position(shutterbox, hass: HomeAssistant) -> None:
     """Test tilt position setting."""
 
     feature_mock, entity_id = shutterbox

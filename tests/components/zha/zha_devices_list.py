@@ -10,6 +10,26 @@ from zigpy.const import (
     SIG_MODEL,
     SIG_NODE_DESC,
 )
+from zigpy.profiles import zha, zll
+from zigpy.types import Bool, uint8_t
+from zigpy.zcl.clusters.closures import DoorLock
+from zigpy.zcl.clusters.general import (
+    Basic,
+    Groups,
+    Identify,
+    LevelControl,
+    MultistateInput,
+    OnOff,
+    Ota,
+    PowerConfiguration,
+    Scenes,
+)
+from zigpy.zcl.clusters.lighting import Color
+from zigpy.zcl.clusters.measurement import (
+    IlluminanceMeasurement,
+    OccupancySensing,
+    TemperatureMeasurement,
+)
 
 DEV_SIG_CLUSTER_HANDLERS = "cluster_handlers"
 DEV_SIG_DEV_NO = "device_no"
@@ -19,6 +39,13 @@ DEV_SIG_ENT_MAP_ID = "entity_id"
 DEV_SIG_EP_ID = "endpoint_id"
 DEV_SIG_EVT_CLUSTER_HANDLERS = "event_cluster_handlers"
 DEV_SIG_ZHA_QUIRK = "zha_quirk"
+DEV_SIG_ATTRIBUTES = "attributes"
+
+
+PROFILE_ID = SIG_EP_PROFILE
+DEVICE_TYPE = SIG_EP_TYPE
+INPUT_CLUSTERS = SIG_EP_INPUT
+OUTPUT_CLUSTERS = SIG_EP_OUTPUT
 
 DEVICES = [
     {
@@ -73,7 +100,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-5-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.bosch_isw_zpr1_wp13_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.bosch_isw_zpr1_wp13_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-5-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -168,8 +195,8 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.centralite_3210_l_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.centralite_3210_l_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -179,12 +206,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.centralite_3210_l_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.centralite_3210_l_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.centralite_3210_l_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.centralite_3210_l_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -292,7 +319,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_3315_s_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_3315_s_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -347,7 +374,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_3320_l_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_3320_l_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -402,7 +429,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_3326_l_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_3326_l_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -457,7 +484,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_motion_sensor_a_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.centralite_motion_sensor_a_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -576,7 +603,7 @@ DEVICES = [
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
                 DEV_SIG_ENT_MAP_ID: (
-                    "binary_sensor.climaxtechnology_sd8sc_00_00_03_12tc_iaszone"
+                    "binary_sensor.climaxtechnology_sd8sc_00_00_03_12tc_ias_zone"
                 ),
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
@@ -651,7 +678,7 @@ DEVICES = [
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
                 DEV_SIG_ENT_MAP_ID: (
-                    "binary_sensor.climaxtechnology_ws15_00_00_03_03tc_iaszone"
+                    "binary_sensor.climaxtechnology_ws15_00_00_03_03tc_ias_zone"
                 ),
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
@@ -737,7 +764,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.heiman_smokesensor_em_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.heiman_smokesensor_em_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -805,7 +832,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.heiman_co_v16_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.heiman_co_v16_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -868,7 +895,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.heiman_warningdevice_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.heiman_warningdevice_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -906,7 +933,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-6-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.hivehome_com_mot003_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.hivehome_com_mot003_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-6-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -1465,7 +1492,7 @@ DEVICES = [
         DEV_SIG_ENT_MAP: {
             ("light", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off", "level"],
-                DEV_SIG_ENT_MAP_CLASS: "Light",
+                DEV_SIG_ENT_MAP_CLASS: "ForceOnLight",
                 DEV_SIG_ENT_MAP_ID: "light.jasco_products_45852_light",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
@@ -1520,7 +1547,7 @@ DEVICES = [
         DEV_SIG_ENT_MAP: {
             ("light", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
-                DEV_SIG_ENT_MAP_CLASS: "Light",
+                DEV_SIG_ENT_MAP_CLASS: "ForceOnLight",
                 DEV_SIG_ENT_MAP_ID: "light.jasco_products_45856_light",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
@@ -1575,7 +1602,7 @@ DEVICES = [
         DEV_SIG_ENT_MAP: {
             ("light", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off", "level"],
-                DEV_SIG_ENT_MAP_CLASS: "Light",
+                DEV_SIG_ENT_MAP_CLASS: "ForceOnLight",
                 DEV_SIG_ENT_MAP_ID: "light.jasco_products_45857_light",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
@@ -1629,7 +1656,7 @@ DEVICES = [
             ("cover", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["level", "on_off"],
                 DEV_SIG_ENT_MAP_CLASS: "KeenVent",
-                DEV_SIG_ENT_MAP_ID: "cover.keen_home_inc_sv02_610_mp_1_3_keenvent",
+                DEV_SIG_ENT_MAP_ID: "cover.keen_home_inc_sv02_610_mp_1_3_keen_vent",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["power"],
@@ -1682,7 +1709,7 @@ DEVICES = [
             ("cover", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["level", "on_off"],
                 DEV_SIG_ENT_MAP_CLASS: "KeenVent",
-                DEV_SIG_ENT_MAP_ID: "cover.keen_home_inc_sv02_612_mp_1_2_keenvent",
+                DEV_SIG_ENT_MAP_ID: "cover.keen_home_inc_sv02_612_mp_1_2_keen_vent",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["power"],
@@ -1735,7 +1762,7 @@ DEVICES = [
             ("cover", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["level", "on_off"],
                 DEV_SIG_ENT_MAP_CLASS: "KeenVent",
-                DEV_SIG_ENT_MAP_ID: "cover.keen_home_inc_sv02_612_mp_1_3_keenvent",
+                DEV_SIG_ENT_MAP_ID: "cover.keen_home_inc_sv02_612_mp_1_3_keen_vent",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["power"],
@@ -1804,7 +1831,7 @@ DEVICES = [
             },
             ("fan", "00:11:22:33:44:55:66:77-1-514"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["fan"],
-                DEV_SIG_ENT_MAP_CLASS: "ZhaFan",
+                DEV_SIG_ENT_MAP_CLASS: "KofFan",
                 DEV_SIG_ENT_MAP_ID: "fan.king_of_fans_inc_hbuniversalcfremote_fan",
             },
         },
@@ -2053,18 +2080,13 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_plug_maus01_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_plug_maus01_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_plug_maus01_rms_voltage",
-            },
-            ("sensor", "00:11:22:33:44:55:66:77-1-2820-power_factor"): {
-                DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementPowerFactor",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_plug_maus01_power_factor",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_plug_maus01_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-0-rssi"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["basic"],
@@ -2079,7 +2101,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-100-15"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["binary_input"],
                 DEV_SIG_ENT_MAP_CLASS: "BinaryInput",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_plug_maus01_binaryinput",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_plug_maus01_binary_input",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-1794-summation_delivered"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["smartenergy_metering"],
@@ -2128,8 +2150,8 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -2139,12 +2161,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -2155,6 +2177,16 @@ DEVICES = [
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementPowerFactor",
                 DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_power_factor",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-1794-summation_delivered"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["smartenergy_metering"],
+                DEV_SIG_ENT_MAP_CLASS: "SmartEnergySummation",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_summation_delivered",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-1794"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["smartenergy_metering"],
+                DEV_SIG_ENT_MAP_CLASS: "SmartEnergyMetering",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_relay_c2acn01_instantaneous_demand",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-0-rssi"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["basic"],
@@ -2969,7 +3001,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_sensor_motion_aq2_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_sensor_motion_aq2_motion",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -2985,11 +3017,6 @@ DEVICES = [
                 DEV_SIG_CLUSTER_HANDLERS: ["illuminance"],
                 DEV_SIG_ENT_MAP_CLASS: "Illuminance",
                 DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_sensor_motion_aq2_illuminance",
-            },
-            ("sensor", "00:11:22:33:44:55:66:77-1-1"): {
-                DEV_SIG_CLUSTER_HANDLERS: ["power"],
-                DEV_SIG_ENT_MAP_CLASS: "Battery",
-                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_sensor_motion_aq2_battery",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["device_temperature"],
@@ -3029,7 +3056,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_sensor_smoke_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_sensor_smoke_smoke",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3183,7 +3210,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_sensor_wleak_aq1_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_sensor_wleak_aq1_ias_zone",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["device_temperature"],
@@ -3221,18 +3248,33 @@ DEVICES = [
         SIG_NODE_DESC: b"\x02@\x807\x10\x7fd\x00\x00\x00d\x00\x00",
         SIG_ENDPOINTS: {
             1: {
-                SIG_EP_TYPE: 10,
-                DEV_SIG_EP_ID: 1,
-                SIG_EP_INPUT: [0, 1, 3, 25, 257, 1280],
-                SIG_EP_OUTPUT: [0, 3, 4, 5, 25],
-                SIG_EP_PROFILE: 260,
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.DOOR_LOCK,
+                INPUT_CLUSTERS: [
+                    Basic.cluster_id,
+                    Identify.cluster_id,
+                    Ota.cluster_id,
+                    DoorLock.cluster_id,
+                ],
+                OUTPUT_CLUSTERS: [
+                    Basic.cluster_id,
+                    Identify.cluster_id,
+                    Groups.cluster_id,
+                    Scenes.cluster_id,
+                    Ota.cluster_id,
+                    DoorLock.cluster_id,
+                ],
             },
             2: {
-                SIG_EP_TYPE: 24322,
-                DEV_SIG_EP_ID: 2,
-                SIG_EP_INPUT: [3],
-                SIG_EP_OUTPUT: [3, 4, 5, 18],
-                SIG_EP_PROFILE: 260,
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: 0x5F02,
+                INPUT_CLUSTERS: [Identify.cluster_id, MultistateInput.cluster_id],
+                OUTPUT_CLUSTERS: [
+                    Identify.cluster_id,
+                    Groups.cluster_id,
+                    Scenes.cluster_id,
+                    MultistateInput.cluster_id,
+                ],
             },
         },
         DEV_SIG_EVT_CLUSTER_HANDLERS: ["1:0x0005", "1:0x0019", "2:0x0005"],
@@ -3240,7 +3282,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_vibration_aq1_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.lumi_lumi_vibration_aq1_vibration",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3262,10 +3304,10 @@ DEVICES = [
                 DEV_SIG_ENT_MAP_CLASS: "LQISensor",
                 DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_vibration_aq1_lqi",
             },
-            ("lock", "00:11:22:33:44:55:66:77-1-257"): {
-                DEV_SIG_CLUSTER_HANDLERS: ["door_lock"],
-                DEV_SIG_ENT_MAP_CLASS: "ZhaDoorLock",
-                DEV_SIG_ENT_MAP_ID: "lock.lumi_lumi_vibration_aq1_doorlock",
+            ("sensor", "00:11:22:33:44:55:66:77-1-2"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["device_temperature"],
+                DEV_SIG_ENT_MAP_CLASS: "DeviceTemperature",
+                DEV_SIG_ENT_MAP_ID: "sensor.lumi_lumi_vibration_aq1_device_temperature",
             },
         },
     },
@@ -3341,7 +3383,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.nyce_3010_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.nyce_3010_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3384,7 +3426,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.nyce_3014_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.nyce_3014_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3591,10 +3633,8 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-3-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: (
-                    "sensor.osram_lightify_rt_tunable_white_active_power"
-                ),
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: ("sensor.osram_lightify_rt_tunable_white_power"),
             },
             ("sensor", "00:11:22:33:44:55:66:77-3-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -3606,16 +3646,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-3-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: (
-                    "sensor.osram_lightify_rt_tunable_white_rms_current"
-                ),
+                DEV_SIG_ENT_MAP_ID: ("sensor.osram_lightify_rt_tunable_white_current"),
             },
             ("sensor", "00:11:22:33:44:55:66:77-3-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: (
-                    "sensor.osram_lightify_rt_tunable_white_rms_voltage"
-                ),
+                DEV_SIG_ENT_MAP_ID: ("sensor.osram_lightify_rt_tunable_white_voltage"),
             },
             ("sensor", "00:11:22:33:44:55:66:77-3-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -3811,7 +3847,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-2-15"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["binary_input"],
                 DEV_SIG_ENT_MAP_CLASS: "BinaryInput",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.philips_rwl020_binaryinput",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.philips_rwl020_binary_input",
             },
             ("button", "00:11:22:33:44:55:66:77-2-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3844,7 +3880,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.samjin_button_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.samjin_button_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3892,7 +3928,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.samjin_multi_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.samjin_multi_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3945,7 +3981,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.samjin_water_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.samjin_water_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -3997,8 +4033,8 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.securifi_ltd_unk_model_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.securifi_ltd_unk_model_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4008,12 +4044,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.securifi_ltd_unk_model_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.securifi_ltd_unk_model_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.securifi_ltd_unk_model_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.securifi_ltd_unk_model_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4061,7 +4097,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.sercomm_corp_sz_dws04n_sf_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.sercomm_corp_sz_dws04n_sf_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4125,8 +4161,8 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.sercomm_corp_sz_esw01_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.sercomm_corp_sz_esw01_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4136,12 +4172,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.sercomm_corp_sz_esw01_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.sercomm_corp_sz_esw01_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.sercomm_corp_sz_esw01_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.sercomm_corp_sz_esw01_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4194,7 +4230,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.sercomm_corp_sz_pir04_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.sercomm_corp_sz_pir04_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4251,8 +4287,8 @@ DEVICES = [
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_rm3250zb_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_rm3250zb_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4264,12 +4300,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_rm3250zb_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_rm3250zb_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_rm3250zb_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_rm3250zb_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4332,12 +4368,12 @@ DEVICES = [
                     "sinope_manufacturer_specific",
                 ],
                 DEV_SIG_ENT_MAP_CLASS: "SinopeTechnologiesThermostat",
-                DEV_SIG_ENT_MAP_ID: "climate.sinope_technologies_th1123zb_sinopetechnologiesthermostat",
+                DEV_SIG_ENT_MAP_ID: "climate.sinope_technologies_th1123zb_thermostat",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1123zb_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1123zb_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4349,12 +4385,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1123zb_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1123zb_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1123zb_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1123zb_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4422,12 +4458,12 @@ DEVICES = [
                     "sinope_manufacturer_specific",
                 ],
                 DEV_SIG_ENT_MAP_CLASS: "SinopeTechnologiesThermostat",
-                DEV_SIG_ENT_MAP_ID: "climate.sinope_technologies_th1124zb_sinopetechnologiesthermostat",
+                DEV_SIG_ENT_MAP_ID: "climate.sinope_technologies_th1124zb_thermostat",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
-                DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1124zb_active_power",
+                DEV_SIG_ENT_MAP_CLASS: "PolledElectricalMeasurement",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1124zb_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4439,12 +4475,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1124zb_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1124zb_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1124zb_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.sinope_technologies_th1124zb_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4497,7 +4533,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-15"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["binary_input"],
                 DEV_SIG_ENT_MAP_CLASS: "BinaryInput",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.smartthings_outletv4_binaryinput",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.smartthings_outletv4_binary_input",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4507,7 +4543,7 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurement",
-                DEV_SIG_ENT_MAP_ID: "sensor.smartthings_outletv4_active_power",
+                DEV_SIG_ENT_MAP_ID: "sensor.smartthings_outletv4_power",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-apparent_power"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4517,12 +4553,12 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_current"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSCurrent",
-                DEV_SIG_ENT_MAP_ID: "sensor.smartthings_outletv4_rms_current",
+                DEV_SIG_ENT_MAP_ID: "sensor.smartthings_outletv4_current",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-rms_voltage"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
                 DEV_SIG_ENT_MAP_CLASS: "ElectricalMeasurementRMSVoltage",
-                DEV_SIG_ENT_MAP_ID: "sensor.smartthings_outletv4_rms_voltage",
+                DEV_SIG_ENT_MAP_ID: "sensor.smartthings_outletv4_voltage",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-2820-ac_frequency"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["electrical_measurement"],
@@ -4570,12 +4606,12 @@ DEVICES = [
             ("device_tracker", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["power"],
                 DEV_SIG_ENT_MAP_CLASS: "ZHADeviceScannerEntity",
-                DEV_SIG_ENT_MAP_ID: "device_tracker.smartthings_tagv4_devicescanner",
+                DEV_SIG_ENT_MAP_ID: "device_tracker.smartthings_tagv4_device_scanner",
             },
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-15"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["binary_input"],
                 DEV_SIG_ENT_MAP_CLASS: "BinaryInput",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.smartthings_tagv4_binaryinput",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.smartthings_tagv4_binary_input",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4694,7 +4730,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.visonic_mct_340_e_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.visonic_mct_340_e_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4747,7 +4783,7 @@ DEVICES = [
             ("climate", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["thermostat", "fan"],
                 DEV_SIG_ENT_MAP_CLASS: "ZenWithinThermostat",
-                DEV_SIG_ENT_MAP_ID: "climate.zen_within_zen_01_zenwithinthermostat",
+                DEV_SIG_ENT_MAP_ID: "climate.zen_within_zen_01_thermostat",
             },
             ("sensor", "00:11:22:33:44:55:66:77-1-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["power"],
@@ -4859,7 +4895,7 @@ DEVICES = [
             ("binary_sensor", "00:11:22:33:44:55:66:77-1-1280"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["ias_zone"],
                 DEV_SIG_ENT_MAP_CLASS: "IASZone",
-                DEV_SIG_ENT_MAP_ID: "binary_sensor.netvox_z308e3ed_iaszone",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.netvox_z308e3ed_ias_zone",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4902,7 +4938,7 @@ DEVICES = [
             ("light", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off", "level"],
                 DEV_SIG_ENT_MAP_CLASS: "MinTransitionLight",
-                DEV_SIG_ENT_MAP_ID: "light.sengled_e11_g13_mintransitionlight",
+                DEV_SIG_ENT_MAP_ID: "light.sengled_e11_g13_light",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4950,7 +4986,7 @@ DEVICES = [
             ("light", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off", "level"],
                 DEV_SIG_ENT_MAP_CLASS: "MinTransitionLight",
-                DEV_SIG_ENT_MAP_ID: "light.sengled_e12_n14_mintransitionlight",
+                DEV_SIG_ENT_MAP_ID: "light.sengled_e12_n14_light",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -4998,7 +5034,7 @@ DEVICES = [
             ("light", "00:11:22:33:44:55:66:77-1"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off", "level", "light_color"],
                 DEV_SIG_ENT_MAP_CLASS: "MinTransitionLight",
-                DEV_SIG_ENT_MAP_ID: "light.sengled_z01_a19nae26_mintransitionlight",
+                DEV_SIG_ENT_MAP_ID: "light.sengled_z01_a19nae26_light",
             },
             ("button", "00:11:22:33:44:55:66:77-1-3"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["identify"],
@@ -5189,7 +5225,7 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-208-12"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["analog_input"],
                 DEV_SIG_ENT_MAP_CLASS: "AnalogInput",
-                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analoginput",
+                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analog_input",
             },
             ("switch", "00:11:22:33:44:55:66:77-208-6"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
@@ -5199,7 +5235,7 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-209-12"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["analog_input"],
                 DEV_SIG_ENT_MAP_CLASS: "AnalogInput",
-                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analoginput_2",
+                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analog_input_2",
             },
             ("switch", "00:11:22:33:44:55:66:77-209-6"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
@@ -5209,7 +5245,7 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-210-12"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["analog_input"],
                 DEV_SIG_ENT_MAP_CLASS: "AnalogInput",
-                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analoginput_3",
+                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analog_input_3",
             },
             ("switch", "00:11:22:33:44:55:66:77-210-6"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
@@ -5219,7 +5255,7 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-211-12"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["analog_input"],
                 DEV_SIG_ENT_MAP_CLASS: "AnalogInput",
-                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analoginput_4",
+                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analog_input_4",
             },
             ("switch", "00:11:22:33:44:55:66:77-211-6"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
@@ -5244,7 +5280,7 @@ DEVICES = [
             ("sensor", "00:11:22:33:44:55:66:77-215-12"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["analog_input"],
                 DEV_SIG_ENT_MAP_CLASS: "AnalogInput",
-                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analoginput_5",
+                DEV_SIG_ENT_MAP_ID: "sensor.digi_xbee3_analog_input_5",
             },
             ("switch", "00:11:22:33:44:55:66:77-215-6"): {
                 DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
@@ -5338,6 +5374,158 @@ DEVICES = [
                 DEV_SIG_CLUSTER_HANDLERS: ["basic"],
                 DEV_SIG_ENT_MAP_CLASS: "LQISensor",
                 DEV_SIG_ENT_MAP_ID: "sensor.efektalab_ru_efekta_pws_lqi",
+            },
+        },
+    },
+    {
+        DEV_SIG_DEV_NO: 100,
+        SIG_MANUFACTURER: "Konke",
+        SIG_MODEL: "3AFE170100510001",
+        SIG_NODE_DESC: b"\x02@\x80\x02\x10RR\x00\x00,R\x00\x00",
+        SIG_ENDPOINTS: {
+            1: {
+                PROFILE_ID: 260,
+                DEVICE_TYPE: zha.DeviceType.ON_OFF_OUTPUT,
+                INPUT_CLUSTERS: [
+                    Basic.cluster_id,
+                    PowerConfiguration.cluster_id,
+                    Identify.cluster_id,
+                    Groups.cluster_id,
+                    Scenes.cluster_id,
+                    OnOff.cluster_id,
+                ],
+                OUTPUT_CLUSTERS: [
+                    Identify.cluster_id,
+                ],
+            }
+        },
+        DEV_SIG_EVT_CLUSTER_HANDLERS: [],
+        DEV_SIG_ENT_MAP: {
+            ("button", "00:11:22:33:44:55:66:77-1-3"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["identify"],
+                DEV_SIG_ENT_MAP_CLASS: "ZHAIdentifyButton",
+                DEV_SIG_ENT_MAP_ID: "button.konke_3afe170100510001_identify",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-1"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["power"],
+                DEV_SIG_ENT_MAP_CLASS: "Battery",
+                DEV_SIG_ENT_MAP_ID: "sensor.konke_3afe170100510001_battery",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-0-rssi"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["basic"],
+                DEV_SIG_ENT_MAP_CLASS: "RSSISensor",
+                DEV_SIG_ENT_MAP_ID: "sensor.konke_3afe170100510001_rssi",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-0-lqi"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["basic"],
+                DEV_SIG_ENT_MAP_CLASS: "LQISensor",
+                DEV_SIG_ENT_MAP_ID: "sensor.konke_3afe170100510001_lqi",
+            },
+        },
+    },
+    {
+        DEV_SIG_DEV_NO: 101,
+        SIG_MANUFACTURER: "Philips",
+        SIG_MODEL: "SML001",
+        SIG_NODE_DESC: b"\x02@\x80\x0b\x10Y?\x00\x00\x00?\x00\x00",
+        SIG_ENDPOINTS: {
+            1: {
+                PROFILE_ID: zll.PROFILE_ID,
+                DEVICE_TYPE: zll.DeviceType.ON_OFF_SENSOR,
+                INPUT_CLUSTERS: [Basic.cluster_id],
+                OUTPUT_CLUSTERS: [
+                    Basic.cluster_id,
+                    Identify.cluster_id,
+                    Groups.cluster_id,
+                    Scenes.cluster_id,
+                    OnOff.cluster_id,
+                    LevelControl.cluster_id,
+                    Color.cluster_id,
+                ],
+            },
+            2: {
+                PROFILE_ID: zha.PROFILE_ID,
+                DEVICE_TYPE: zha.DeviceType.OCCUPANCY_SENSOR,
+                INPUT_CLUSTERS: [
+                    Basic.cluster_id,
+                    PowerConfiguration.cluster_id,
+                    Identify.cluster_id,
+                    IlluminanceMeasurement.cluster_id,
+                    TemperatureMeasurement.cluster_id,
+                    OccupancySensing.cluster_id,
+                ],
+                OUTPUT_CLUSTERS: [
+                    Ota.cluster_id,
+                ],
+            },
+        },
+        DEV_SIG_ATTRIBUTES: {
+            2: {
+                "basic": {
+                    "trigger_indicator": Bool(False),
+                },
+                "philips_occupancy": {
+                    "sensitivity": uint8_t(1),
+                },
+            }
+        },
+        DEV_SIG_EVT_CLUSTER_HANDLERS: [
+            "1:0x0005",
+            "1:0x0006",
+            "1:0x0008",
+            "1:0x0300",
+            "2:0x0019",
+        ],
+        DEV_SIG_ENT_MAP: {
+            ("button", "00:11:22:33:44:55:66:77-2-3"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["identify"],
+                DEV_SIG_ENT_MAP_CLASS: "ZHAIdentifyButton",
+                DEV_SIG_ENT_MAP_ID: "button.philips_sml001_identify",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-2-1"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["power"],
+                DEV_SIG_ENT_MAP_CLASS: "Battery",
+                DEV_SIG_ENT_MAP_ID: "sensor.philips_sml001_battery",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-0-rssi"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["basic"],
+                DEV_SIG_ENT_MAP_CLASS: "RSSISensor",
+                DEV_SIG_ENT_MAP_ID: "sensor.philips_sml001_rssi",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-1-0-lqi"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["basic"],
+                DEV_SIG_ENT_MAP_CLASS: "LQISensor",
+                DEV_SIG_ENT_MAP_ID: "sensor.philips_sml001_lqi",
+            },
+            ("binary_sensor", "00:11:22:33:44:55:66:77-1-6"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["on_off"],
+                DEV_SIG_ENT_MAP_CLASS: "Motion",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.philips_sml001_motion",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-2-1024"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["illuminance"],
+                DEV_SIG_ENT_MAP_CLASS: "Illuminance",
+                DEV_SIG_ENT_MAP_ID: "sensor.philips_sml001_illuminance",
+            },
+            ("binary_sensor", "00:11:22:33:44:55:66:77-2-1030"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["philips_occupancy"],
+                DEV_SIG_ENT_MAP_CLASS: "HueOccupancy",
+                DEV_SIG_ENT_MAP_ID: "binary_sensor.philips_sml001_occupancy",
+            },
+            ("sensor", "00:11:22:33:44:55:66:77-2-1026"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["temperature"],
+                DEV_SIG_ENT_MAP_CLASS: "Temperature",
+                DEV_SIG_ENT_MAP_ID: "sensor.philips_sml001_temperature",
+            },
+            ("switch", "00:11:22:33:44:55:66:77-2-0-trigger_indicator"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["basic"],
+                DEV_SIG_ENT_MAP_CLASS: "HueMotionTriggerIndicatorSwitch",
+                DEV_SIG_ENT_MAP_ID: "switch.philips_sml001_led_trigger_indicator",
+            },
+            ("select", "00:11:22:33:44:55:66:77-2-1030-motion_sensitivity"): {
+                DEV_SIG_CLUSTER_HANDLERS: ["philips_occupancy"],
+                DEV_SIG_ENT_MAP_CLASS: "HueV1MotionSensitivity",
+                DEV_SIG_ENT_MAP_ID: "select.philips_sml001_motion_sensitivity",
             },
         },
     },

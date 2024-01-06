@@ -25,7 +25,6 @@ from .core import discovery
 from .core.cluster_handlers.security import IasWd
 from .core.const import (
     CLUSTER_HANDLER_IAS_WD,
-    DATA_ZHA,
     SIGNAL_ADD_ENTITIES,
     WARNING_DEVICE_MODE_BURGLAR,
     WARNING_DEVICE_MODE_EMERGENCY,
@@ -39,6 +38,7 @@ from .core.const import (
     WARNING_DEVICE_STROBE_NO,
     Strobe,
 )
+from .core.helpers import get_zha_data
 from .core.registries import ZHA_ENTITIES
 from .entity import ZhaEntity
 
@@ -56,7 +56,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Zigbee Home Automation siren from config entry."""
-    entities_to_create = hass.data[DATA_ZHA][Platform.SIREN]
+    zha_data = get_zha_data(hass)
+    entities_to_create = zha_data.platforms[Platform.SIREN]
 
     unsub = async_dispatcher_connect(
         hass,
@@ -73,6 +74,8 @@ async def async_setup_entry(
 @MULTI_MATCH(cluster_handler_names=CLUSTER_HANDLER_IAS_WD)
 class ZHASiren(ZhaEntity, SirenEntity):
     """Representation of a ZHA siren."""
+
+    _attr_name: str = "Siren"
 
     def __init__(
         self,

@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 import logging
 import time
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import ciso8601
 from fnv_hash_fast import fnv1a_32
@@ -33,14 +33,14 @@ from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import DeclarativeBase, Mapped, aliased, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
-from typing_extensions import Self
 
 from homeassistant.const import (
     MAX_LENGTH_EVENT_EVENT_TYPE,
     MAX_LENGTH_STATE_ENTITY_ID,
     MAX_LENGTH_STATE_STATE,
 )
-from homeassistant.core import Context, Event, EventOrigin, State, split_entity_id
+from homeassistant.core import Context, Event, EventOrigin, State
+from homeassistant.helpers.entity import EntityInfo
 from homeassistant.helpers.json import JSON_DUMP, json_bytes, json_bytes_strip_null
 import homeassistant.util.dt as dt_util
 from homeassistant.util.json import (
@@ -64,12 +64,11 @@ from .models import (
 
 
 # SQLAlchemy Schema
-# pylint: disable=invalid-name
 class Base(DeclarativeBase):
     """Base class for tables."""
 
 
-SCHEMA_VERSION = 41
+SCHEMA_VERSION = 42
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -152,10 +151,9 @@ def compile_char_zero(type_: TypeDecorator, compiler: Any, **kw: Any) -> str:
     return "CHAR(0)"  # Uses 1 byte on MySQL (no change on sqlite)
 
 
-@compiles(UnusedDateTime, "postgresql")  # type: ignore[misc,no-untyped-call]
 @compiles(Unused, "postgresql")  # type: ignore[misc,no-untyped-call]
 def compile_char_one(type_: TypeDecorator, compiler: Any, **kw: Any) -> str:
-    """Compile UnusedDateTime and Unused as CHAR(1) on postgresql."""
+    """Compile Unused as CHAR(1) on postgresql."""
     return "CHAR(1)"  # Uses 1 byte
 
 
@@ -178,13 +176,17 @@ class NativeLargeBinary(LargeBinary):
 # For MariaDB and MySQL we can use an unsigned integer type since it will fit 2**32
 # for sqlite and postgresql we use a bigint
 UINT_32_TYPE = BigInteger().with_variant(
-    mysql.INTEGER(unsigned=True), "mysql", "mariadb"  # type: ignore[no-untyped-call]
+    mysql.INTEGER(unsigned=True),  # type: ignore[no-untyped-call]
+    "mysql",
+    "mariadb",
 )
 JSON_VARIANT_CAST = Text().with_variant(
-    postgresql.JSON(none_as_null=True), "postgresql"  # type: ignore[no-untyped-call]
+    postgresql.JSON(none_as_null=True),  # type: ignore[no-untyped-call]
+    "postgresql",
 )
 JSONB_VARIANT_CAST = Text().with_variant(
-    postgresql.JSONB(none_as_null=True), "postgresql"  # type: ignore[no-untyped-call]
+    postgresql.JSONB(none_as_null=True),  # type: ignore[no-untyped-call]
+    "postgresql",
 )
 DATETIME_TYPE = (
     DateTime(timezone=True)
@@ -199,6 +201,7 @@ DOUBLE_TYPE = (
 )
 UNUSED_LEGACY_COLUMN = Unused(0)
 UNUSED_LEGACY_DATETIME_COLUMN = UnusedDateTime(timezone=True)
+UNUSED_LEGACY_INTEGER_COLUMN = SmallInteger()
 DOUBLE_PRECISION_TYPE_SQL = "DOUBLE PRECISION"
 CONTEXT_BINARY_TYPE = LargeBinary(CONTEXT_ID_BIN_MAX_LENGTH).with_variant(
     NativeLargeBinary(CONTEXT_ID_BIN_MAX_LENGTH), "mysql", "mariadb", "sqlite"
@@ -420,7 +423,7 @@ class States(Base):
     entity_id: Mapped[str | None] = mapped_column(UNUSED_LEGACY_COLUMN)
     state: Mapped[str | None] = mapped_column(String(MAX_LENGTH_STATE_STATE))
     attributes: Mapped[str | None] = mapped_column(UNUSED_LEGACY_COLUMN)
-    event_id: Mapped[int | None] = mapped_column(UNUSED_LEGACY_COLUMN)
+    event_id: Mapped[int | None] = mapped_column(UNUSED_LEGACY_INTEGER_COLUMN)
     last_changed: Mapped[datetime | None] = mapped_column(UNUSED_LEGACY_DATETIME_COLUMN)
     last_changed_ts: Mapped[float | None] = mapped_column(TIMESTAMP_TYPE)
     last_updated: Mapped[datetime | None] = mapped_column(UNUSED_LEGACY_DATETIME_COLUMN)
@@ -560,8 +563,7 @@ class StateAttributes(Base):
     @staticmethod
     def shared_attrs_bytes_from_event(
         event: Event,
-        entity_sources: dict[str, dict[str, str]],
-        exclude_attrs_by_domain: dict[str, set[str]],
+        entity_sources: dict[str, EntityInfo],
         dialect: SupportedDialect | None,
     ) -> bytes:
         """Create shared_attrs from a state_changed event."""
@@ -569,14 +571,9 @@ class StateAttributes(Base):
         # None state means the state was removed from the state machine
         if state is None:
             return b"{}"
-        domain = split_entity_id(state.entity_id)[0]
         exclude_attrs = set(ALL_DOMAIN_EXCLUDE_ATTRS)
-        if base_platform_attrs := exclude_attrs_by_domain.get(domain):
-            exclude_attrs |= base_platform_attrs
-        if (entity_info := entity_sources.get(state.entity_id)) and (
-            integration_attrs := exclude_attrs_by_domain.get(entity_info["domain"])
-        ):
-            exclude_attrs |= integration_attrs
+        if state_info := state.state_info:
+            exclude_attrs |= state_info["unrecorded_attributes"]
         encoder = json_bytes_strip_null if dialect == PSQL_DIALECT else json_bytes
         bytes_result = encoder(
             {k: v for k, v in state.attributes.items() if k not in exclude_attrs}

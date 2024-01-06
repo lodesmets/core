@@ -142,7 +142,7 @@ def _retrieve_link_attenuation_received_state(
     return status.attenuation[1] / 10  # type: ignore[no-any-return]
 
 
-@dataclass
+@dataclass(frozen=True)
 class FritzSensorEntityDescription(SensorEntityDescription, FritzEntityDescription):
     """Describes Fritz sensor entity."""
 
@@ -309,4 +309,4 @@ class FritzBoxSensor(FritzBoxBaseCoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the value reported by the sensor."""
-        return self.coordinator.data.get(self.entity_description.key)
+        return self.coordinator.data["entity_states"].get(self.entity_description.key)

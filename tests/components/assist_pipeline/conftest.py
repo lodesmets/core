@@ -7,13 +7,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from homeassistant.components import stt, tts
-from homeassistant.components.assist_pipeline import DOMAIN
-from homeassistant.components.assist_pipeline.pipeline import PipelineStorageCollection
+from homeassistant.components import stt, tts, wake_word
+from homeassistant.components.assist_pipeline import DOMAIN, select as assist_select
+from homeassistant.components.assist_pipeline.pipeline import (
+    PipelineData,
+    PipelineStorageCollection,
+)
 from homeassistant.config_entries import ConfigEntry, ConfigFlow
-from homeassistant.core import HomeAssistant
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.setup import async_setup_component
 
 from tests.common import (
@@ -24,17 +28,20 @@ from tests.common import (
     mock_integration,
     mock_platform,
 )
-from tests.components.tts.conftest import (  # noqa: F401, pylint: disable=unused-import
-    init_cache_dir_side_effect,
-    mock_get_cache_files,
-    mock_init_cache_dir,
-)
 
 _TRANSCRIPT = "test transcript"
 
 
+@pytest.fixture(autouse=True)
+def mock_tts_cache_dir_autouse(mock_tts_cache_dir):
+    """Mock the TTS cache dir with empty dir."""
+    return mock_tts_cache_dir
+
+
 class BaseProvider:
     """Mock STT provider."""
+
+    _supported_languages = ["en-US"]
 
     def __init__(self, text: str) -> None:
         """Init test provider."""
@@ -44,7 +51,7 @@ class BaseProvider:
     @property
     def supported_languages(self) -> list[str]:
         """Return a list of supported languages."""
-        return ["en-US"]
+        return self._supported_languages
 
     @property
     def supported_formats(self) -> list[stt.AudioFormats]:
@@ -89,11 +96,20 @@ class MockSttProvider(BaseProvider, stt.Provider):
 class MockSttProviderEntity(BaseProvider, stt.SpeechToTextEntity):
     """Mock provider entity."""
 
+    _attr_name = "Mock STT"
+
 
 class MockTTSProvider(tts.Provider):
     """Mock TTS provider."""
 
     name = "Test"
+    _supported_languages = ["en-US"]
+    _supported_voices = {
+        "en-US": [
+            tts.Voice("james_earl_jones", "James Earl Jones"),
+            tts.Voice("fran_drescher", "Fran Drescher"),
+        ]
+    }
 
     @property
     def default_language(self) -> str:
@@ -103,7 +119,12 @@ class MockTTSProvider(tts.Provider):
     @property
     def supported_languages(self) -> list[str]:
         """Return list of supported languages."""
-        return ["en-US"]
+        return self._supported_languages
+
+    @callback
+    def async_get_supported_voices(self, language: str) -> list[tts.Voice] | None:
+        """Return a list of supported voices for a language."""
+        return self._supported_voices.get(language)
 
     @property
     def supported_options(self) -> list[str]:
@@ -111,25 +132,27 @@ class MockTTSProvider(tts.Provider):
         return ["voice", "age", tts.ATTR_AUDIO_OUTPUT]
 
     def get_tts_audio(
-        self, message: str, language: str, options: dict[str, Any] | None = None
+        self, message: str, language: str, options: dict[str, Any]
     ) -> tts.TtsAudioType:
         """Load TTS data."""
         return ("mp3", b"")
 
 
-class MockTTS(MockPlatform):
+class MockTTSPlatform(MockPlatform):
     """A mock TTS platform."""
 
     PLATFORM_SCHEMA = tts.PLATFORM_SCHEMA
 
-    async def async_get_engine(
-        self,
-        hass: HomeAssistant,
-        config: ConfigType,
-        discovery_info: DiscoveryInfoType | None = None,
-    ) -> tts.Provider:
-        """Set up a mock speech component."""
-        return MockTTSProvider()
+    def __init__(self, *, async_get_engine, **kwargs):
+        """Initialize the tts platform."""
+        super().__init__(**kwargs)
+        self.async_get_engine = async_get_engine
+
+
+@pytest.fixture
+async def mock_tts_provider(hass) -> MockTTSProvider:
+    """Mock TTS provider."""
+    return MockTTSProvider()
 
 
 @pytest.fixture
@@ -153,6 +176,90 @@ class MockSttPlatform(MockPlatform):
         self.async_get_engine = async_get_engine
 
 
+class MockWakeWordEntity(wake_word.WakeWordDetectionEntity):
+    """Mock wake word entity."""
+
+    fail_process_audio = False
+    url_path = "wake_word.test"
+    _attr_name = "test"
+
+    alternate_detections = False
+    detected_wake_word_index = 0
+
+    async def get_supported_wake_words(self) -> list[wake_word.WakeWord]:
+        """Return a list of supported wake words."""
+        return [
+            wake_word.WakeWord(id="test_ww", name="Test Wake Word"),
+            wake_word.WakeWord(id="test_ww_2", name="Test Wake Word 2"),
+        ]
+
+    async def _async_process_audio_stream(
+        self, stream: AsyncIterable[tuple[bytes, int]], wake_word_id: str | None
+    ) -> wake_word.DetectionResult | None:
+        """Try to detect wake word(s) in an audio stream with timestamps."""
+        wake_words = await self.get_supported_wake_words()
+
+        if self.alternate_detections:
+            detected_id = wake_words[self.detected_wake_word_index].id
+            self.detected_wake_word_index = (self.detected_wake_word_index + 1) % len(
+                wake_words
+            )
+        else:
+            detected_id = wake_words[0].id
+
+        async for chunk, timestamp in stream:
+            if chunk.startswith(b"wake word"):
+                return wake_word.DetectionResult(
+                    wake_word_id=detected_id,
+                    timestamp=timestamp,
+                    queued_audio=[(b"queued audio", 0)],
+                )
+
+        # Not detected
+        return None
+
+
+class MockWakeWordEntity2(wake_word.WakeWordDetectionEntity):
+    """Second mock wake word entity to test cooldown."""
+
+    fail_process_audio = False
+    url_path = "wake_word.test2"
+    _attr_name = "test2"
+
+    async def get_supported_wake_words(self) -> list[wake_word.WakeWord]:
+        """Return a list of supported wake words."""
+        return [wake_word.WakeWord(id="test_ww", name="Test Wake Word")]
+
+    async def _async_process_audio_stream(
+        self, stream: AsyncIterable[tuple[bytes, int]], wake_word_id: str | None
+    ) -> wake_word.DetectionResult | None:
+        """Try to detect wake word(s) in an audio stream with timestamps."""
+        wake_words = await self.get_supported_wake_words()
+
+        async for chunk, timestamp in stream:
+            if chunk.startswith(b"wake word"):
+                return wake_word.DetectionResult(
+                    wake_word_id=wake_words[0].id,
+                    timestamp=timestamp,
+                    queued_audio=[(b"queued audio", 0)],
+                )
+
+        # Not detected
+        return None
+
+
+@pytest.fixture
+async def mock_wake_word_provider_entity(hass) -> MockWakeWordEntity:
+    """Mock wake word provider."""
+    return MockWakeWordEntity()
+
+
+@pytest.fixture
+async def mock_wake_word_provider_entity2(hass) -> MockWakeWordEntity2:
+    """Mock wake word provider."""
+    return MockWakeWordEntity2()
+
+
 class MockFlow(ConfigFlow):
     """Test flow."""
 
@@ -167,14 +274,14 @@ def config_flow_fixture(hass: HomeAssistant) -> Generator[None, None, None]:
 
 
 @pytest.fixture
-async def init_components(
+async def init_supporting_components(
     hass: HomeAssistant,
     mock_stt_provider: MockSttProvider,
     mock_stt_provider_entity: MockSttProviderEntity,
+    mock_tts_provider: MockTTSProvider,
+    mock_wake_word_provider_entity: MockWakeWordEntity,
+    mock_wake_word_provider_entity2: MockWakeWordEntity2,
     config_flow_fixture,
-    init_cache_dir_side_effect,  # noqa: F811
-    mock_get_cache_files,  # noqa: F811
-    mock_init_cache_dir,  # noqa: F811
 ):
     """Initialize relevant components with empty configs."""
 
@@ -182,14 +289,18 @@ async def init_components(
         hass: HomeAssistant, config_entry: ConfigEntry
     ) -> bool:
         """Set up test config entry."""
-        await hass.config_entries.async_forward_entry_setup(config_entry, stt.DOMAIN)
+        await hass.config_entries.async_forward_entry_setups(
+            config_entry, [Platform.STT, Platform.WAKE_WORD]
+        )
         return True
 
     async def async_unload_entry_init(
         hass: HomeAssistant, config_entry: ConfigEntry
     ) -> bool:
         """Unload up test config entry."""
-        await hass.config_entries.async_forward_entry_unload(config_entry, stt.DOMAIN)
+        await hass.config_entries.async_unload_platforms(
+            config_entry, [Platform.STT, Platform.WAKE_WORD]
+        )
         return True
 
     async def async_setup_entry_stt_platform(
@@ -200,6 +311,16 @@ async def init_components(
         """Set up test stt platform via config entry."""
         async_add_entities([mock_stt_provider_entity])
 
+    async def async_setup_entry_wake_word_platform(
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        async_add_entities: AddEntitiesCallback,
+    ) -> None:
+        """Set up test wake word platform via config entry."""
+        async_add_entities(
+            [mock_wake_word_provider_entity, mock_wake_word_provider_entity2]
+        )
+
     mock_integration(
         hass,
         MockModule(
@@ -208,7 +329,13 @@ async def init_components(
             async_unload_entry=async_unload_entry_init,
         ),
     )
-    mock_platform(hass, "test.tts", MockTTS())
+    mock_platform(
+        hass,
+        "test.tts",
+        MockTTSPlatform(
+            async_get_engine=AsyncMock(return_value=mock_tts_provider),
+        ),
+    )
     mock_platform(
         hass,
         "test.stt",
@@ -217,12 +344,19 @@ async def init_components(
             async_setup_entry=async_setup_entry_stt_platform,
         ),
     )
+    mock_platform(
+        hass,
+        "test.wake_word",
+        MockPlatform(
+            async_setup_entry=async_setup_entry_wake_word_platform,
+        ),
+    )
     mock_platform(hass, "test.config_flow")
 
+    assert await async_setup_component(hass, "homeassistant", {})
     assert await async_setup_component(hass, tts.DOMAIN, {"tts": {"platform": "test"}})
     assert await async_setup_component(hass, stt.DOMAIN, {"stt": {"platform": "test"}})
     assert await async_setup_component(hass, "media_source", {})
-    assert await async_setup_component(hass, "assist_pipeline", {})
 
     config_entry = MockConfigEntry(domain="test")
     config_entry.add_to_hass(hass)
@@ -231,6 +365,92 @@ async def init_components(
 
 
 @pytest.fixture
-def pipeline_storage(hass: HomeAssistant, init_components) -> PipelineStorageCollection:
+async def init_components(hass: HomeAssistant, init_supporting_components):
+    """Initialize relevant components with empty configs."""
+
+    assert await async_setup_component(hass, "assist_pipeline", {})
+
+
+@pytest.fixture
+async def assist_device(hass: HomeAssistant, init_components) -> dr.DeviceEntry:
+    """Create an assist device."""
+    config_entry = MockConfigEntry(domain="test_assist_device")
+    config_entry.add_to_hass(hass)
+
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_or_create(
+        name="Test Device",
+        config_entry_id=config_entry.entry_id,
+        identifiers={("test_assist_device", "test")},
+    )
+
+    async def async_setup_entry_init(
+        hass: HomeAssistant, config_entry: ConfigEntry
+    ) -> bool:
+        """Set up test config entry."""
+        await hass.config_entries.async_forward_entry_setups(
+            config_entry, [Platform.SELECT]
+        )
+        return True
+
+    async def async_unload_entry_init(
+        hass: HomeAssistant, config_entry: ConfigEntry
+    ) -> bool:
+        """Unload up test config entry."""
+        await hass.config_entries.async_unload_platforms(
+            config_entry, [Platform.SELECT]
+        )
+        return True
+
+    async def async_setup_entry_select_platform(
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
+        async_add_entities: AddEntitiesCallback,
+    ) -> None:
+        """Set up test select platform via config entry."""
+        entities = [
+            assist_select.AssistPipelineSelect(
+                hass, "test_assist_device", "test-prefix"
+            ),
+            assist_select.VadSensitivitySelect(hass, "test-prefix"),
+        ]
+        for ent in entities:
+            ent._attr_device_info = dr.DeviceInfo(
+                identifiers={("test_assist_device", "test")},
+            )
+        async_add_entities(entities)
+
+    mock_integration(
+        hass,
+        MockModule(
+            "test_assist_device",
+            async_setup_entry=async_setup_entry_init,
+            async_unload_entry=async_unload_entry_init,
+        ),
+    )
+    mock_platform(
+        hass,
+        "test_assist_device.select",
+        MockPlatform(
+            async_setup_entry=async_setup_entry_select_platform,
+        ),
+    )
+    mock_platform(hass, "test_assist_device.config_flow")
+
+    with mock_config_flow("test_assist_device", ConfigFlow):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    return device
+
+
+@pytest.fixture
+def pipeline_data(hass: HomeAssistant, init_components) -> PipelineData:
+    """Return pipeline data."""
+    return hass.data[DOMAIN]
+
+
+@pytest.fixture
+def pipeline_storage(pipeline_data) -> PipelineStorageCollection:
     """Return pipeline storage collection."""
-    return hass.data[DOMAIN].pipeline_store
+    return pipeline_data.pipeline_store

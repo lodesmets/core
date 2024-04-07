@@ -1,4 +1,5 @@
 """Helpers to help during startup."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
@@ -46,7 +47,7 @@ def _async_at_core_state(
         if unsub:
             unsub()
 
-    unsub = hass.bus.async_listen_once(event_type, _matched_event)
+    unsub = hass.bus.async_listen_once(event_type, _matched_event, run_immediately=True)
     return cancel
 
 
@@ -81,7 +82,7 @@ def async_at_started(
     """
 
     def _is_started(hass: HomeAssistant) -> bool:
-        return hass.state == CoreState.running
+        return hass.state is CoreState.running
 
     return _async_at_core_state(
         hass, at_start_cb, EVENT_HOMEASSISTANT_STARTED, _is_started

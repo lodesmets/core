@@ -7,17 +7,15 @@ from typing import Any
 from ring_doorbell import Auth, AuthenticationError, Requires2FAError
 import voluptuous as vol
 
+from homeassistant.components import dhcp
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
-from homeassistant.const import (
-    APPLICATION_NAME,
-    CONF_PASSWORD,
-    CONF_TOKEN,
-    CONF_USERNAME,
-    __version__ as ha_version,
-)
+from homeassistant.const import CONF_PASSWORD, CONF_TOKEN, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.device_registry as dr
 
+from . import get_auth_agent_id
 from .const import CONF_2FA, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,15 +25,21 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 STEP_REAUTH_DATA_SCHEMA = vol.Schema({vol.Required(CONF_PASSWORD): str})
 
+UNKNOWN_RING_ACCOUNT = "unknown_ring_account"
 
-async def validate_input(hass: HomeAssistant, data):
+
+async def validate_input(hass: HomeAssistant, data: dict[str, str]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
 
-    auth = Auth(f"{APPLICATION_NAME}/{ha_version}")
+    user_agent, hardware_id = await get_auth_agent_id(hass)
+    auth = Auth(
+        user_agent,
+        http_client_session=async_get_clientsession(hass),
+        hardware_id=hardware_id,
+    )
 
     try:
-        token = await hass.async_add_executor_job(
-            auth.fetch_token,
+        token = await auth.async_fetch_token(
             data[CONF_USERNAME],
             data[CONF_PASSWORD],
             data.get(CONF_2FA),
@@ -56,10 +60,33 @@ class RingConfigFlow(ConfigFlow, domain=DOMAIN):
     user_pass: dict[str, Any] = {}
     reauth_entry: ConfigEntry | None = None
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_dhcp(
+        self, discovery_info: dhcp.DhcpServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle discovery via dhcp."""
+        # Ring has a single config entry per cloud username rather than per device
+        # so we check whether that device is already configured.
+        # If the device is not configured there's either no ring config entry
+        # yet or the device is registered to a different account
+        await self.async_set_unique_id(UNKNOWN_RING_ACCOUNT)
+        self._abort_if_unique_id_configured()
+        if self.hass.config_entries.async_has_entries(DOMAIN):
+            device_registry = dr.async_get(self.hass)
+            if device_registry.async_get_device(
+                identifiers={(DOMAIN, discovery_info.macaddress)}
+            ):
+                return self.async_abort(reason="already_configured")
+
+        return await self.async_step_user()
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
-        errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_USERNAME])
+            self._abort_if_unique_id_configured()
             try:
                 token = await validate_input(self.hass, user_input)
             except Require2FA:
@@ -68,11 +95,10 @@ class RingConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_2fa()
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                await self.async_set_unique_id(user_input[CONF_USERNAME])
                 return self.async_create_entry(
                     title=user_input[CONF_USERNAME],
                     data={CONF_USERNAME: user_input[CONF_USERNAME], CONF_TOKEN: token},
@@ -82,7 +108,9 @@ class RingConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
-    async def async_step_2fa(self, user_input=None):
+    async def async_step_2fa(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Handle 2fa step."""
         if user_input:
             if self.reauth_entry:
@@ -110,7 +138,7 @@ class RingConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Dialog that informs the user that reauth is required."""
-        errors = {}
+        errors: dict[str, str] = {}
         assert self.reauth_entry is not None
 
         if user_input:
@@ -122,7 +150,7 @@ class RingConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self.async_step_2fa()
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:

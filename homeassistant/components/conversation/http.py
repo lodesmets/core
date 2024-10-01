@@ -19,7 +19,6 @@ from homeassistant.components.http.data_validator import RequestDataValidator
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import config_validation as cv, intent
-from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.util import language as language_util
 
 from .agent_manager import (
@@ -28,13 +27,11 @@ from .agent_manager import (
     async_get_agent,
     get_agent_manager,
 )
-from .const import DOMAIN
+from .const import DATA_COMPONENT, DATA_DEFAULT_ENTITY
 from .default_agent import (
     METADATA_CUSTOM_FILE,
     METADATA_CUSTOM_SENTENCE,
-    DefaultAgent,
     SentenceTriggerResult,
-    async_get_default_agent,
 )
 from .entity import ConversationEntity
 from .models import ConversationInput
@@ -94,9 +91,7 @@ async def websocket_prepare(
     agent = async_get_agent(hass, msg.get("agent_id"))
 
     if agent is None:
-        connection.send_error(
-            msg["id"], websocket_api.const.ERR_NOT_FOUND, "Agent not found"
-        )
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, "Agent not found")
         return
 
     await agent.async_prepare(msg.get("language"))
@@ -115,23 +110,25 @@ async def websocket_list_agents(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """List conversation agents and, optionally, if they support a given language."""
-    entity_component: EntityComponent[ConversationEntity] = hass.data[DOMAIN]
-
     country = msg.get("country")
     language = msg.get("language")
     agents = []
 
-    for entity in entity_component.entities:
+    for entity in hass.data[DATA_COMPONENT].entities:
         supported_languages = entity.supported_languages
         if language and supported_languages != MATCH_ALL:
             supported_languages = language_util.matches(
                 language, supported_languages, country
             )
 
+        name = entity.entity_id
+        if state := hass.states.get(entity.entity_id):
+            name = state.name
+
         agents.append(
             {
                 "id": entity.entity_id,
-                "name": entity.name or entity.entity_id,
+                "name": name,
                 "supported_languages": supported_languages,
             }
         )
@@ -141,6 +138,9 @@ async def websocket_list_agents(
     for agent_info in manager.async_get_agent_info():
         agent = manager.async_get_agent(agent_info.id)
         assert agent is not None
+
+        if isinstance(agent, ConversationEntity):
+            continue
 
         supported_languages = agent.supported_languages
         if language and supported_languages != MATCH_ALL:
@@ -171,16 +171,15 @@ async def websocket_hass_agent_debug(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Return intents that would be matched by the default agent for a list of sentences."""
-    agent = async_get_default_agent(hass)
-    assert isinstance(agent, DefaultAgent)
     results = [
-        await agent.async_recognize(
+        await hass.data[DATA_DEFAULT_ENTITY].async_recognize(
             ConversationInput(
                 text=sentence,
                 context=connection.context(msg),
                 conversation_id=None,
                 device_id=msg.get("device_id"),
                 language=msg.get("language", hass.config.language),
+                agent_id=None,
             )
         )
         for sentence in msg["sentences"]
@@ -308,9 +307,9 @@ def _get_debug_targets(
 
 def _get_unmatched_slots(
     result: RecognizeResult,
-) -> dict[str, str | int]:
+) -> dict[str, str | int | float]:
     """Return a dict of unmatched text/range slot entities."""
-    unmatched_slots: dict[str, str | int] = {}
+    unmatched_slots: dict[str, str | int | float] = {}
     for entity in result.unmatched_entities_list:
         if isinstance(entity, UnmatchedTextEntity):
             if entity.text == MISSING_ENTITY:

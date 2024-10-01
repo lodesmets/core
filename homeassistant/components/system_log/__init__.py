@@ -19,7 +19,7 @@ from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-KeyType = tuple[str, tuple[str, int], tuple[str, int, str] | None]
+type KeyType = tuple[str, tuple[str, int], tuple[str, int, str] | None]
 
 CONF_MAX_ENTRIES = "max_entries"
 CONF_FIRE_EVENT = "fire_event"
@@ -106,7 +106,7 @@ def _figure_out_source(
         # and since this code is running in the event loop, we need to avoid
         # blocking I/O.
 
-        frame = sys._getframe(4)  # pylint: disable=protected-access
+        frame = sys._getframe(4)  # noqa: SLF001
         #
         # We use _getframe with 4 to skip the following frames:
         #
@@ -152,10 +152,10 @@ def _safe_get_message(record: logging.LogRecord) -> str:
     """
     try:
         return record.getMessage()
-    except Exception as ex:  # pylint: disable=broad-except
+    except Exception as ex:  # noqa: BLE001
         try:
             return f"Bad logger message: {record.msg} ({record.args})"
-        except Exception:  # pylint: disable=broad-except
+        except Exception:  # noqa: BLE001
             return f"Bad logger message: {ex}"
 
 
@@ -299,9 +299,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass_path: str = HOMEASSISTANT_PATH[0]
     config_dir = hass.config.config_dir
-    paths_re = re.compile(
-        r"(?:{})/(.*)".format("|".join([re.escape(x) for x in (hass_path, config_dir)]))
-    )
+    paths_re = re.compile(rf"(?:{re.escape(hass_path)}|{re.escape(config_dir)})/(.*)")
     handler = LogErrorHandler(
         hass, conf[CONF_MAX_ENTRIES], conf[CONF_FIRE_EVENT], paths_re
     )

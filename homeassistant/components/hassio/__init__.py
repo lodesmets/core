@@ -15,6 +15,7 @@ import voluptuous as vol
 from homeassistant.auth.const import GROUP_ID_ADMIN
 from homeassistant.components import panel_custom
 from homeassistant.components.homeassistant import async_set_stop_handler
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import SOURCE_SYSTEM, ConfigEntry
 from homeassistant.const import (
     ATTR_NAME,
@@ -27,10 +28,9 @@ from homeassistant.core import (
     HassJob,
     HomeAssistant,
     ServiceCall,
-    async_get_hass,
+    async_get_hass_or_none,
     callback,
 )
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
@@ -74,13 +74,14 @@ from .const import (
     DATA_HOST_INFO,
     DATA_INFO,
     DATA_KEY_SUPERVISOR_ISSUES,
+    DATA_NETWORK_INFO,
     DATA_OS_INFO,
     DATA_STORE,
     DATA_SUPERVISOR_INFO,
     DOMAIN,
     HASSIO_UPDATE_INTERVAL,
 )
-from .data import (
+from .coordinator import (
     HassioDataUpdateCoordinator,
     get_addons_changelogs,  # noqa: F401
     get_addons_info,
@@ -101,24 +102,20 @@ from .handler import (  # noqa: F401
     HassioAPIError,
     async_create_backup,
     async_get_addon_discovery_info,
-    async_get_addon_info,
     async_get_addon_store_info,
     async_get_green_settings,
     async_get_yellow_settings,
     async_install_addon,
     async_reboot_host,
-    async_restart_addon,
     async_set_addon_options,
     async_set_green_settings,
     async_set_yellow_settings,
-    async_start_addon,
-    async_stop_addon,
-    async_uninstall_addon,
     async_update_addon,
     async_update_core,
     async_update_diagnostics,
     async_update_os,
     async_update_supervisor,
+    get_supervisor_client,
 )
 from .http import HassIOView
 from .ingress import async_setup_ingress_view
@@ -160,10 +157,7 @@ VALID_ADDON_SLUG = vol.Match(re.compile(r"^[-_.A-Za-z0-9]+$"))
 def valid_addon(value: Any) -> str:
     """Validate value is a valid addon slug."""
     value = VALID_ADDON_SLUG(value)
-
-    hass: HomeAssistant | None = None
-    with suppress(HomeAssistantError):
-        hass = async_get_hass()
+    hass = async_get_hass_or_none()
 
     if hass and (addons := get_addons_info(hass)) is not None and value not in addons:
         raise vol.Invalid("Not a valid add-on slug")
@@ -196,7 +190,7 @@ SCHEMA_BACKUP_PARTIAL = SCHEMA_BACKUP_FULL.extend(
     {
         vol.Optional(ATTR_HOMEASSISTANT): cv.boolean,
         vol.Optional(ATTR_FOLDERS): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional(ATTR_ADDONS): vol.All(cv.ensure_list, [cv.slug]),
+        vol.Optional(ATTR_ADDONS): vol.All(cv.ensure_list, [VALID_ADDON_SLUG]),
     }
 )
 
@@ -211,7 +205,7 @@ SCHEMA_RESTORE_PARTIAL = SCHEMA_RESTORE_FULL.extend(
     {
         vol.Optional(ATTR_HOMEASSISTANT): cv.boolean,
         vol.Optional(ATTR_FOLDERS): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional(ATTR_ADDONS): vol.All(cv.ensure_list, [cv.slug]),
+        vol.Optional(ATTR_ADDONS): vol.All(cv.ensure_list, [VALID_ADDON_SLUG]),
     }
 )
 
@@ -353,8 +347,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
     # This overrides the normal API call that would be forwarded
     development_repo = config.get(DOMAIN, {}).get(CONF_FRONTEND_REPO)
     if development_repo is not None:
-        hass.http.register_static_path(
-            "/api/hassio/app", os.path.join(development_repo, "hassio/build"), False
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    "/api/hassio/app",
+                    os.path.join(development_repo, "hassio/build"),
+                    False,
+                )
+            ]
         )
 
     hass.http.register_view(HassIOView(host, websession))
@@ -386,7 +386,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
         last_timezone = new_timezone
         await hassio.update_hass_timezone(new_timezone)
 
-    hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, push_config, run_immediately=True)
+    hass.bus.async_listen(EVENT_CORE_CONFIG_UPDATE, push_config)
 
     push_config_task = hass.async_create_task(push_config(None), eager_start=True)
     # Start listening for problems with supervisor and making issues
@@ -433,6 +433,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
                 hass.data[DATA_CORE_INFO],
                 hass.data[DATA_SUPERVISOR_INFO],
                 hass.data[DATA_OS_INFO],
+                hass.data[DATA_NETWORK_INFO],
             ) = await asyncio.gather(
                 create_eager_task(hassio.get_info()),
                 create_eager_task(hassio.get_host_info()),
@@ -440,6 +441,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:  # noqa:
                 create_eager_task(hassio.get_core_info()),
                 create_eager_task(hassio.get_supervisor_info()),
                 create_eager_task(hassio.get_os_info()),
+                create_eager_task(hassio.get_network_info()),
             )
 
         except HassioAPIError as err:

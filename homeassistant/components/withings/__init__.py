@@ -10,8 +10,9 @@ from collections.abc import Awaitable, Callable
 import contextlib
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
+from aiohttp import ClientError
 from aiohttp.hdrs import METH_POST
 from aiohttp.web import Request, Response
 from aiowithings import NotificationCategory, WithingsClient
@@ -47,6 +48,7 @@ from .coordinator import (
     WithingsActivityDataUpdateCoordinator,
     WithingsBedPresenceDataUpdateCoordinator,
     WithingsDataUpdateCoordinator,
+    WithingsDeviceDataUpdateCoordinator,
     WithingsGoalsDataUpdateCoordinator,
     WithingsMeasurementDataUpdateCoordinator,
     WithingsSleepDataUpdateCoordinator,
@@ -58,6 +60,7 @@ PLATFORMS = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR]
 SUBSCRIBE_DELAY = timedelta(seconds=5)
 UNSUBSCRIBE_DELAY = timedelta(seconds=1)
 CONF_CLOUDHOOK_URL = "cloudhook_url"
+type WithingsConfigEntry = ConfigEntry[WithingsData]
 
 
 @dataclass(slots=True)
@@ -71,6 +74,7 @@ class WithingsData:
     goals_coordinator: WithingsGoalsDataUpdateCoordinator
     activity_coordinator: WithingsActivityDataUpdateCoordinator
     workout_coordinator: WithingsWorkoutDataUpdateCoordinator
+    device_coordinator: WithingsDeviceDataUpdateCoordinator
     coordinators: set[WithingsDataUpdateCoordinator] = field(default_factory=set)
 
     def __post_init__(self) -> None:
@@ -82,10 +86,11 @@ class WithingsData:
             self.goals_coordinator,
             self.activity_coordinator,
             self.workout_coordinator,
+            self.device_coordinator,
         }
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: WithingsConfigEntry) -> bool:
     """Set up Withings from a config entry."""
     if CONF_WEBHOOK_ID not in entry.data or entry.unique_id is None:
         new_data = entry.data.copy()
@@ -120,12 +125,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         goals_coordinator=WithingsGoalsDataUpdateCoordinator(hass, client),
         activity_coordinator=WithingsActivityDataUpdateCoordinator(hass, client),
         workout_coordinator=WithingsWorkoutDataUpdateCoordinator(hass, client),
+        device_coordinator=WithingsDeviceDataUpdateCoordinator(hass, client),
     )
 
     for coordinator in withings_data.coordinators:
         await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = withings_data
+    entry.runtime_data = withings_data
 
     webhook_manager = WithingsWebhookManager(hass, entry)
 
@@ -158,13 +164,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: WithingsConfigEntry) -> bool:
     """Unload Withings config entry."""
     webhook_unregister(hass, entry.data[CONF_WEBHOOK_ID])
 
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unload_ok
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def async_subscribe_webhooks(client: WithingsClient, webhook_url: str) -> None:
@@ -199,7 +203,7 @@ class WithingsWebhookManager:
     _webhooks_registered = False
     _register_lock = asyncio.Lock()
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: WithingsConfigEntry) -> None:
         """Initialize webhook manager."""
         self.hass = hass
         self.entry = entry
@@ -207,7 +211,7 @@ class WithingsWebhookManager:
     @property
     def withings_data(self) -> WithingsData:
         """Return Withings data."""
-        return cast(WithingsData, self.hass.data[DOMAIN][self.entry.entry_id])
+        return self.entry.runtime_data
 
     async def unregister_webhook(
         self,
@@ -274,7 +278,11 @@ class WithingsWebhookManager:
 
 async def async_unsubscribe_webhooks(client: WithingsClient) -> None:
     """Unsubscribe to all Withings webhooks."""
-    current_webhooks = await client.list_notification_configurations()
+    try:
+        current_webhooks = await client.list_notification_configurations()
+    except ClientError:
+        LOGGER.exception("Error when unsubscribing webhooks")
+        return
 
     for webhook_configuration in current_webhooks:
         LOGGER.debug(
@@ -292,7 +300,9 @@ async def async_unsubscribe_webhooks(client: WithingsClient) -> None:
         )
 
 
-async def _async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry) -> str:
+async def _async_cloudhook_generate_url(
+    hass: HomeAssistant, entry: WithingsConfigEntry
+) -> str:
     """Generate the full URL for a webhook_id."""
     if CONF_CLOUDHOOK_URL not in entry.data:
         webhook_id = entry.data[CONF_WEBHOOK_ID]
@@ -307,7 +317,7 @@ async def _async_cloudhook_generate_url(hass: HomeAssistant, entry: ConfigEntry)
     return str(entry.data[CONF_CLOUDHOOK_URL])
 
 
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def async_remove_entry(hass: HomeAssistant, entry: WithingsConfigEntry) -> None:
     """Cleanup when entry is removed."""
     if cloud.async_active_subscription(hass):
         try:

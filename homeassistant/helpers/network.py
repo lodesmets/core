@@ -6,6 +6,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from ipaddress import ip_address
 
+from aiohttp import hdrs
 from hass_nabucasa import remote
 import yarl
 
@@ -122,6 +123,7 @@ def get_url(
     require_current_request: bool = False,
     require_ssl: bool = False,
     require_standard_port: bool = False,
+    require_cloud: bool = False,
     allow_internal: bool = True,
     allow_external: bool = True,
     allow_cloud: bool = True,
@@ -145,7 +147,7 @@ def get_url(
 
     # Try finding an URL in the order specified
     for url_type in order:
-        if allow_internal and url_type == TYPE_URL_INTERNAL:
+        if allow_internal and url_type == TYPE_URL_INTERNAL and not require_cloud:
             with suppress(NoURLAvailableError):
                 return _get_internal_url(
                     hass,
@@ -155,7 +157,7 @@ def get_url(
                     require_standard_port=require_standard_port,
                 )
 
-        if allow_external and url_type == TYPE_URL_EXTERNAL:
+        if require_cloud or (allow_external and url_type == TYPE_URL_EXTERNAL):
             with suppress(NoURLAvailableError):
                 return _get_external_url(
                     hass,
@@ -165,7 +167,10 @@ def get_url(
                     require_current_request=require_current_request,
                     require_ssl=require_ssl,
                     require_standard_port=require_standard_port,
+                    require_cloud=require_cloud,
                 )
+            if require_cloud:
+                raise NoURLAvailableError
 
     # For current request, we accept loopback interfaces (e.g., 127.0.0.1),
     # the Supervisor hostname and localhost transparently
@@ -212,7 +217,18 @@ def _get_request_host() -> str | None:
     """Get the host address of the current request."""
     if (request := http.current_request.get()) is None:
         raise NoURLAvailableError
-    return yarl.URL(request.url).host
+    # partition the host to remove the port
+    # because the raw host header can contain the port
+    host = request.headers.get(hdrs.HOST)
+    if host is None:
+        return None
+    # IPv6 addresses are enclosed in brackets
+    # use same logic as yarl and urllib to extract the host
+    if "[" in host:
+        return (host.partition("[")[2]).partition("]")[0]
+    if ":" in host:
+        host = host.partition(":")[0]
+    return host
 
 
 @bind_hass
@@ -263,8 +279,12 @@ def _get_external_url(
     require_current_request: bool = False,
     require_ssl: bool = False,
     require_standard_port: bool = False,
+    require_cloud: bool = False,
 ) -> str:
     """Get external URL of this instance."""
+    if require_cloud:
+        return _get_cloud_url(hass, require_current_request=require_current_request)
+
     if prefer_cloud and allow_cloud:
         with suppress(NoURLAvailableError):
             return _get_cloud_url(hass)

@@ -1,20 +1,21 @@
 """Creates the device tracker entity for the mower."""
 
-from homeassistant.components.device_tracker import SourceType, TrackerEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.device_tracker import TrackerEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from . import AutomowerConfigEntry
 from .coordinator import AutomowerDataUpdateCoordinator
 from .entity import AutomowerBaseEntity
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: AutomowerConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up device tracker platform."""
-    coordinator: AutomowerDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     async_add_entities(
         AutomowerDeviceTrackerEntity(mower_id, coordinator)
         for mower_id in coordinator.data
@@ -35,11 +36,6 @@ class AutomowerDeviceTrackerEntity(AutomowerBaseEntity, TrackerEntity):
         """Initialize AutomowerDeviceTracker."""
         super().__init__(mower_id, coordinator)
         self._attr_unique_id = mower_id
-
-    @property
-    def source_type(self) -> SourceType:
-        """Return the source type of the device."""
-        return SourceType.GPS
 
     @property
     def latitude(self) -> float:

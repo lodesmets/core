@@ -30,8 +30,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.typing import VolDictType
 from homeassistant.util.network import is_link_local
 
+from . import AxisConfigEntry
 from .const import (
     CONF_STREAM_PROFILE,
     CONF_VIDEO_SOURCE,
@@ -62,7 +64,7 @@ class AxisFlowHandler(ConfigFlow, domain=AXIS_DOMAIN):
     def __init__(self) -> None:
         """Initialize the Axis config flow."""
         self.config: dict[str, Any] = {}
-        self.discovery_schema: dict[vol.Required, type[str | int]] | None = None
+        self.discovery_schema: VolDictType | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -147,12 +149,10 @@ class AxisFlowHandler(ConfigFlow, domain=AXIS_DOMAIN):
         return self.async_create_entry(title=title, data=self.config)
 
     async def async_step_reconfigure(
-        self, user_input: Mapping[str, Any] | None = None
+        self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
         """Trigger a reconfiguration flow."""
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        assert entry
-        return await self._redo_configuration(entry.data, keep_password=True)
+        return await self._redo_configuration(entry_data, keep_password=True)
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
@@ -260,13 +260,14 @@ class AxisFlowHandler(ConfigFlow, domain=AXIS_DOMAIN):
 class AxisOptionsFlowHandler(OptionsFlowWithConfigEntry):
     """Handle Axis device options."""
 
+    config_entry: AxisConfigEntry
     hub: AxisHub
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the Axis device options."""
-        self.hub = AxisHub.get_hub(self.hass, self.config_entry)
+        self.hub = self.config_entry.runtime_data
         return await self.async_step_configure_stream()
 
     async def async_step_configure_stream(
